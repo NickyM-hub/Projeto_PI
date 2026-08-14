@@ -36,8 +36,6 @@ CREATE TABLE Usuario (
         )
 );
 
-
-
 CREATE TABLE Servicos (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
 
@@ -64,7 +62,6 @@ CREATE TABLE Servicos (
         REFERENCES Usuario(id)
 );
 
-
 CREATE TABLE Portfolio_Fotos (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
 
@@ -79,9 +76,6 @@ CREATE TABLE Portfolio_Fotos (
         FOREIGN KEY (empreendedor_id)
         REFERENCES Usuario(id)
 );
-
-
-
 
 CREATE TABLE Agendamentos (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
@@ -132,9 +126,6 @@ CREATE TABLE Agendamentos (
         CHECK (data_hora_fim > data_hora_inicio)
 );
 
-
-
-
 CREATE TABLE Bloqueios_Clientes (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
 
@@ -152,10 +143,6 @@ CREATE TABLE Bloqueios_Clientes (
         FOREIGN KEY (cliente_id)
         REFERENCES Usuario(id)
 );
-
-
-
-
 
 CREATE TABLE Pagamentos (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
@@ -184,9 +171,6 @@ CREATE TABLE Pagamentos (
         REFERENCES Agendamentos(id)
 );
 
-
-
-
 CREATE TABLE Cupons (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
 
@@ -200,9 +184,6 @@ CREATE TABLE Cupons (
 
     data_validade DATE NOT NULL
 );
-
-
-
 
 CREATE TABLE Mensagens_Chat (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
@@ -224,9 +205,6 @@ CREATE TABLE Mensagens_Chat (
         FOREIGN KEY (remetente_id)
         REFERENCES Usuario(id)
 );
-
-
-
 
 CREATE TABLE Avaliacoes (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
@@ -349,7 +327,6 @@ ativo BIT NOT NULL DEFAULT 1,
 CONSTRAINT FK_Disponibilidade_Usuario
 FOREIGN KEY (empreendedor_id) REFERENCES Usuario(id) ON DELETE CASCADE,
 CONSTRAINT CK_Horario_valido CHECK (hora_fim > hora_inicio)
-
 );
 
 CREATE TABLE Cupons_uso(
@@ -439,16 +416,12 @@ CONSTRAINT FK_BloqueioHorarios_Usuario FOREIGN KEY (empreendedor_id) REFERENCES 
 CONSTRAINT CK_Bloqueio_Valido CHECK(data_fim > data_inicio)
 );
 
-
-
 CREATE INDEX IX_Usuario_Email ON Usuario(email);
 CREATE INDEX IX_Usuario_Documento ON Usuario(documento);
 CREATE INDEX IX_Agendamentos_Data ON Agendamentos(data_hora_inicio);
 CREATE INDEX IX_Agendamento_Status ON Agendamentos(status);
 CREATE INDEX IX_Servicos_Empreendedor ON Servicos(empreendedor_id);
 CREATE INDEX IX_Portifolio_Empreendedor ON Portfolio_Fotos(empreendedor_id);
-
-
 
 --++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -512,7 +485,6 @@ BEGIN
             @valor_desconto DECIMAL(10,2),
             @agendamento_id BIGINT;
 
-    -- validações
     IF NOT EXISTS (SELECT 1 FROM Usuario WHERE id = @empreendedor_id AND tipo_usuario = 'EMPREENDEDOR')
     BEGIN
         RAISERROR('Empreendedor invalido.', 16, 1);
@@ -525,7 +497,6 @@ BEGIN
         RETURN;
     END
 
-    -- o servico precisa existir E pertencer ao empreendedor informado
     SELECT @duracao = duracao_estimada, @valor = preco
     FROM Servicos
     WHERE id = @servico_id AND empreendedor_id = @empreendedor_id;
@@ -546,7 +517,6 @@ BEGIN
 
         SET @agendamento_id = SCOPE_IDENTITY();
 
-        -- aplicar cupom se informado
         IF @cupom_codigo IS NOT NULL
         BEGIN
             SELECT @cupom_id = id, @valor_desconto = valor
@@ -582,30 +552,14 @@ GO
 
 -- TRIGGERS
 
--- =========================================================
--- PRÉ-REQUISITO: a tabela Historico_Agendamentos não tinha
--- coluna pra guardar o texto descritivo da alteração.
--- =========================================================
 ALTER TABLE Historico_Agendamentos
     ADD detalhes VARCHAR(500) NULL;
 GO
 
--- =========================================================
--- IMPORTANTE (aplica-se às 3 triggers abaixo):
--- Para saber corretamente "quem" fez a alteração, a aplicação
--- precisa, na mesma conexão/sessão, ANTES do UPDATE em Agendamentos,
--- executar:
---
---   EXEC sys.sp_set_session_context @key = N'usuario_id', @value = @id_do_usuario_logado;
---
--- Sem isso, as triggers caem num fallback por SYSTEM_USER (que
--- normalmente não funciona em apps com connection pooling) e,
--- em último caso, assumem o cliente do próprio agendamento.
--- =========================================================
 
 
 -- =========================================================
--- TRIGGER: controle de quantidade de alterações (cliente/empreendedor)
+-- TRIGGER: controle de quantidade de alteraï¿½ï¿½es (cliente/empreendedor)
 -- =========================================================
 CREATE OR ALTER TRIGGER TR_Agendamentos_ControleAlteracoes
 ON Agendamentos
@@ -614,8 +568,6 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- trava de segurança contra recursão: este trigger faz um UPDATE
-    -- na própria tabela mais abaixo. Isso não depende da configuração
     -- RECURSIVE_TRIGGERS do banco.
     IF TRIGGER_NESTLEVEL(OBJECT_ID('TR_Agendamentos_ControleAlteracoes')) > 1
         RETURN;
@@ -648,7 +600,7 @@ GO
 
 
 -- =========================================================
--- TRIGGER: bloqueio automático de clientes que cancelam
+-- TRIGGER: bloqueio automï¿½tico de clientes que cancelam
 -- =========================================================
 CREATE OR ALTER TRIGGER TR_Agendamentos_BloqueioCliente
 ON Agendamentos
@@ -672,7 +624,7 @@ GO
 
 
 -- =========================================================
--- TRIGGER: auditoria de alterações
+-- TRIGGER: auditoria de alteraï¿½ï¿½es
 -- =========================================================
 CREATE OR ALTER TRIGGER TR_Agendamento_Historico
 ON Agendamentos
@@ -689,7 +641,7 @@ BEGIN
         COALESCE(
             @usuario_atual_id,
             (SELECT TOP 1 id FROM Usuario WHERE email = SYSTEM_USER),
-            i.cliente_id  -- último fallback: evita falhar o UPDATE por causa do NOT NULL
+            i.cliente_id
         ),
         'ALTERACAO',
         CONCAT('Status alterado de ', d.status, ' para ', i.status,
