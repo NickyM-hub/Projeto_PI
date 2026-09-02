@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 
+import mssql
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -37,6 +39,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'Integrações',
+    'Pagamentos',
+    'Serviços',
+    'Usuarios',
 ]
 
 MIDDLEWARE = [
@@ -76,6 +82,14 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+    },
+    'default': {
+        'ENGINE': 'mssql',
+        'NAME': 'PROJETO_PI',
+        'HOST': 'localhost',
+        'USER': 'SENACEDU/nicole.mconceicao',
+        'PASSWORD': '',
+        'OPTIONS': {'driver': 'ODBC Driver 17 for SQL Server'},
     }
 }
 

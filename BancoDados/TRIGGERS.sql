@@ -1,109 +1,79 @@
 USE PROJETO_PI
 
 
---++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-- treigger controle agendamento 
 
--- TRIGGERS
+create trigger TR_Agendamentos_ControleAlteracoes
+on Agendamentos after update
+as
+begin
+set nocount on;
 
-ALTER TABLE Historico_Agendamentos
-    ADD detalhes VARCHAR(500) NULL;
-GO
+declare @agendamento_id bigint,
+@cliente_id bigint,
+@empreendedor_id bigint,
+@status_antigo varchar(20),
+@status_novo varchar(20);
 
+select @agendamento_id = id,
+@cliente_id = cliente_id,
+@empreendedor_id = empreendedor_id,
+@status_novo = status
+from inserted;
 
+select @status_antigo = status from deleted;
 
--- =========================================================
--- TRIGGER: controle de quantidade de alteraï¿½ï¿½es (cliente/empreendedor)
--- =========================================================
-CREATE OR ALTER TRIGGER TR_Agendamentos_ControleAlteracoes
-ON Agendamentos
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
+-- contador de alterações
 
-    -- RECURSIVE_TRIGGERS do banco.
-    IF TRIGGER_NESTLEVEL(OBJECT_ID('TR_Agendamentos_ControleAlteracoes')) > 1
-        RETURN;
+if @status_antigo <> @status_novo or
+(update(data_hora_inicio) or update (data_hora_fim) or update (servico_id))
+begin
+if(select system_user) like '%cliente%' or exists(select 1 from inserted where cliente_id = (select id from Usuario where email = system_user))
+update Agendamentos set qtd_alteracoes_cliente = qtd_alteracoes_cliente + 1
+where id = @agendamento_id;
+else
+update Agendamentos set qtd_alteracoes_emp = qtd_alteracoes_emp + 1
+where id = @agendamento_id
+end
+end;
+go
 
-    DECLARE @usuario_atual_id BIGINT = TRY_CAST(SESSION_CONTEXT(N'usuario_id') AS BIGINT);
+-- trigger bloqueio automatico clientes
 
-    UPDATE a
-    SET a.qtd_alteracoes_cliente = a.qtd_alteracoes_cliente
-            + CASE WHEN x.tipo_usuario = 'CLIENTE' THEN 1 ELSE 0 END,
-        a.qtd_alteracoes_emp = a.qtd_alteracoes_emp
-            + CASE WHEN x.tipo_usuario = 'EMPREENDEDOR' THEN 1 ELSE 0 END
-    FROM Agendamentos a
-    JOIN (
-        SELECT
-            i.id,
-            COALESCE(
-                u.tipo_usuario,
-                (SELECT TOP 1 tipo_usuario FROM Usuario WHERE email = SYSTEM_USER)
-            ) AS tipo_usuario
-        FROM inserted i
-        JOIN deleted d ON d.id = i.id
-        LEFT JOIN Usuario u ON u.id = @usuario_atual_id
-        WHERE i.status <> d.status
-           OR i.data_hora_inicio <> d.data_hora_inicio
-           OR i.data_hora_fim <> d.data_hora_fim
-           OR i.servico_id <> d.servico_id
-    ) x ON x.id = a.id;
-END
-GO
+create trigger TR_Agendamentos_BloqueioCliente
+on Agendamentos after update
+as
+begin
+set nocount on;
 
+insert into Bloqueios_Clientes(cliente_id)
+select distinct i.cliente_id
+from inserted i 
+join deleted d on i.id = d.id
+where i.status = 'CANCELADO'
+and d.status in ('CONFIRMADO', 'PENDENTE')
+and not exists (select 1 from Bloqueios_Clientes bc
+where bc.cliente_id = i.cliente_id and bc.ativo = 1);
+end;
+go;
 
--- =========================================================
--- TRIGGER: bloqueio automï¿½tico de clientes que cancelam
--- =========================================================
-CREATE OR ALTER TRIGGER TR_Agendamentos_BloqueioCliente
-ON Agendamentos
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
+--trigger auditoria
 
-    INSERT INTO Bloqueios_Clientes (cliente_id)
-    SELECT DISTINCT i.cliente_id
-    FROM inserted i
-    JOIN deleted d ON i.id = d.id
-    WHERE i.status = 'CANCELADO'
-      AND d.status IN ('CONFIRMADO', 'PENDENTE')
-      AND NOT EXISTS (
-            SELECT 1 FROM Bloqueios_Clientes bc
-            WHERE bc.cliente_id = i.cliente_id AND bc.ativo = 1
-      );
-END
-GO
+create trigger TR_Agendamento_Historico
+on Agendamentos after update
+as
+begin
+set nocount on;
 
-
--- =========================================================
--- TRIGGER: auditoria de alteraï¿½ï¿½es
--- =========================================================
-CREATE OR ALTER TRIGGER TR_Agendamento_Historico
-ON Agendamentos
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DECLARE @usuario_atual_id BIGINT = TRY_CAST(SESSION_CONTEXT(N'usuario_id') AS BIGINT);
-
-    INSERT INTO Historico_Agendamentos (agendamento_id, usuario_alterou_id, tipo_alteracao, detalhes)
-    SELECT
-        i.id,
-        COALESCE(
-            @usuario_atual_id,
-            (SELECT TOP 1 id FROM Usuario WHERE email = SYSTEM_USER),
-            i.cliente_id
-        ),
-        'ALTERACAO',
-        CONCAT('Status alterado de ', d.status, ' para ', i.status,
-               ' | Data: ', i.data_hora_inicio)
-    FROM inserted i
-    JOIN deleted d ON i.id = d.id
-    WHERE i.status <> d.status
-       OR i.data_hora_inicio <> d.data_hora_inicio;
-END
-GO
-
---++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+insert into Historico_Agendamentos(agendamento_id, usuario_alterou_id,tipo_alteracao)
+select i.id,
+(select id from Usuario where email = system_user),
+'ALTERAÇÃO',
+concat('Status alterado de ', d.status, ' para', i.status,
+' | Data: ', i.data_hora_inicio)
+from inserted i 
+join deleted d on i.id= d.id
+where i.status <> d.status
+or i.data_hora_inicio <> d.data_hora_inicio;
+end;
+go

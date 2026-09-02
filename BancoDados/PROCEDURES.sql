@@ -1,118 +1,78 @@
 USE PROJETO_PI
 
---++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-- procedure registrar usuario
 
--- PROCEDURES
+create or alter procedure sp_RegistrarUsuario
+@nome varchar(150),
+@documento varchar(14),
+@email varchar(100),
+@senha varchar(255),
+@telefone varchar(15),
+@data_nascimento date,
+@tipo_usuario varchar(20),
+@latitude decimal (10,8) = null,
+@longitude decimal(11,8) = null
+as
+begin
 
--- =========================================================
--- PROCEDURE: registrar usuario
--- =========================================================
-CREATE OR ALTER PROCEDURE sp_RegistrarUsuario
-    @nome VARCHAR(150),
-    @documento VARCHAR(14),
-    @email VARCHAR(100),
-    @senha VARCHAR(255),
-    @telefone VARCHAR(15),
-    @data_nascimento DATE,
-    @tipo_usuario VARCHAR(20),
-    @latitude DECIMAL(10,8) = NULL,
-    @longitude DECIMAL(11,8) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
+set nocount on;
 
-    IF EXISTS (SELECT 1 FROM Usuario WHERE email = @email OR documento = @documento)
-    BEGIN
-        RAISERROR('E-mail ou documento ja cadastrado.', 16, 1);
-        RETURN;
-    END
+if exists(select 1 from Usuario where email = @email or documento = @documento)
+begin
+raiserror('E-mail ou documento ja cadastrado.', 16,1);
+return;
+end
+insert into Usuario(nome, documento, email, senha, telefone, data_nascimento, tipo_usuario, latitude, longitude )
+values (@nome, @documento, @email, @senha, @telefone, @data_nascimento, @tipo_usuario, @latitude, @longitude);
 
-    INSERT INTO Usuario (nome, documento, email, senha, telefone, data_nascimento, tipo_usuario, latitude, longitude)
-    VALUES (@nome, @documento, @email, @senha, @telefone, @data_nascimento, @tipo_usuario, @latitude, @longitude);
+select scope_identity() as novo_id;
+end;
+go
 
-    SELECT SCOPE_IDENTITY() AS novo_id;
-END
-GO
+-- procedure agendamento 
 
+create or alter procedure sp_CriarAgendamento
+@cliente_id bigint,
+@empreendedor_id bigint,
+@servico_id bigint,
+@data_hora_inicio datetime2,
+@cupom_codigo varchar(20) = null
+as
+begin
+set nocount on;
+declare @duracao time, @data_fim datetime2, @valor decimal(10,2) = 0, @cupom_id bigint, @valor_desconto decimal(10,2),
+@agendamento_id bigint
 
--- =========================================================
--- PROCEDURE: criar agendamento
--- =========================================================
-CREATE OR ALTER PROCEDURE sp_CriarAgendamento
-    @cliente_id BIGINT,
-    @empreendedor_id BIGINT,
-    @servico_id BIGINT,
-    @data_hora_inicio DATETIME2,
-    @cupom_codigo VARCHAR(20) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
+--validações
 
-    DECLARE @duracao TIME,
-            @data_fim DATETIME2,
-            @valor DECIMAL(10,2) = 0,
-            @cupom_id BIGINT,
-            @valor_desconto DECIMAL(10,2),
-            @agendamento_id BIGINT;
+if not exists(select 1 from Usuario where id = @empreendedor_id and tipo_usuario = 'EMPREENDEDOR')
+raiserror('Empreendedor invalido.', 16, 1);
 
-    IF NOT EXISTS (SELECT 1 FROM Usuario WHERE id = @empreendedor_id AND tipo_usuario = 'EMPREENDEDOR')
-    BEGIN
-        RAISERROR('Empreendedor invalido.', 16, 1);
-        RETURN;
-    END
+select @duracao = duracao_estimada, @valor = preco
+from Servicos where id = @servico_id;
+set @data_fim = dateadd(minute, datediff(minute, '00:00', @duracao), @data_hora_inicio);
+begin transaction;
+insert into Agendamentos (cliente_id, empreendedor_id, servico_id,data_hora_inicio, data_hora_fim, status)
+values (@cliente_id, @empreendedor_id, @servico_id, @data_hora_inicio, @data_fim, 'PENDENTE');
 
-    IF NOT EXISTS (SELECT 1 FROM Usuario WHERE id = @cliente_id AND tipo_usuario = 'CLIENTE')
-    BEGIN
-        RAISERROR('Cliente invalido.', 16, 1);
-        RETURN;
-    END
+set @agendamento_id = scope_identity();
 
-    SELECT @duracao = duracao_estimada, @valor = preco
-    FROM Servicos
-    WHERE id = @servico_id AND empreendedor_id = @empreendedor_id;
+-- aplicar cupom se informado
 
-    IF @duracao IS NULL
-    BEGIN
-        RAISERROR('Servico invalido ou nao pertence ao empreendedor informado.', 16, 1);
-        RETURN;
-    END
+if @cupom_codigo is not null
+begin
+select @cupom_id = id, @valor_desconto = valor
+from Cupons
+where codigo = @cupom_codigo
+and data_validade >= cast(getdate() as date);
 
-    SET @data_fim = DATEADD(MINUTE, DATEDIFF(MINUTE, '00:00', @duracao), @data_hora_inicio);
-
-    BEGIN TRY
-        BEGIN TRANSACTION;
-
-        INSERT INTO Agendamentos (cliente_id, empreendedor_id, servico_id, data_hora_inicio, data_hora_fim, status)
-        VALUES (@cliente_id, @empreendedor_id, @servico_id, @data_hora_inicio, @data_fim, 'PENDENTE');
-
-        SET @agendamento_id = SCOPE_IDENTITY();
-
-        IF @cupom_codigo IS NOT NULL
-        BEGIN
-            SELECT @cupom_id = id, @valor_desconto = valor
-            FROM Cupons
-            WHERE codigo = @cupom_codigo
-              AND data_validade >= CAST(GETDATE() AS DATE);
-
-            IF @cupom_id IS NOT NULL
-            BEGIN
-                INSERT INTO Cupons_uso (cupom_id, agendamento_id, usuario_id, valor_desconto)
-                VALUES (@cupom_id, @agendamento_id, @cliente_id, @valor_desconto);
-            END
-        END
-
-        COMMIT TRANSACTION;
-    END TRY
-    BEGIN CATCH
-        IF XACT_STATE() <> 0
-            ROLLBACK TRANSACTION;
-
-        THROW;
-    END CATCH
-
-    SELECT @agendamento_id AS agendamento_id;
-END
-GO
-
---++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+if @cupom_id is not null
+begin
+insert into Cupons_uso(cupom_id, agendamento_id, usuario_id, valor_desconto)
+values (@cupom_id, @agendamento_id, @cliente_id, @valor_desconto);
+end
+end
+commit transaction;
+select @agendamento_id as agendamento_id;
+end
+go
