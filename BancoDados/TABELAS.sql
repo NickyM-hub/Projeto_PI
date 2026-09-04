@@ -5,24 +5,16 @@ USE PROJETO_PI
 
 CREATE TABLE Usuario (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
-
     nome VARCHAR(150) NOT NULL,
-
     documento VARCHAR(14) NOT NULL UNIQUE,
-
     email VARCHAR(100) NOT NULL UNIQUE,
-
     senha VARCHAR(255) NOT NULL,
-
     telefone VARCHAR(15) NOT NULL,
-
     data_nascimento DATE NOT NULL,
-
     tipo_usuario VARCHAR(20) NOT NULL
         CHECK (tipo_usuario IN ('CLIENTE', 'EMPREENDEDOR')),
 
     latitude DECIMAL(10,8) NULL,
-
     longitude DECIMAL(11,8) NULL,
 
     criado_em DATETIME2 NOT NULL
@@ -327,7 +319,7 @@ cidade varchar(80) not null,
 estado char(2) not null,
 latitude decimal(10,8) null,
 longitude decimal(11,8) null,
-principaç bit not null default 0,
+principal bit not null default 0,
 criado_em datetime2 not null default sysdatetime(),
 constraint FK_Endereco_Usuario
   foreign key (usuario_id) references Usuario(id) on delete cascade,
