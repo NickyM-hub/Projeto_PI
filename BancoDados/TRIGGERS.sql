@@ -1,6 +1,3 @@
-USE PROJETO_PI
-
-
 -- treigger controle agendamento 
 
 create trigger TR_Agendamentos_ControleAlteracoes
@@ -77,3 +74,8 @@ where i.status <> d.status
 or i.data_hora_inicio <> d.data_hora_inicio;
 end;
 go
+
+
+
+
+

@@ -5,16 +5,24 @@ USE PROJETO_PI
 
 CREATE TABLE Usuario (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
+
     nome VARCHAR(150) NOT NULL,
+
     documento VARCHAR(14) NOT NULL UNIQUE,
+
     email VARCHAR(100) NOT NULL UNIQUE,
+
     senha VARCHAR(255) NOT NULL,
+
     telefone VARCHAR(15) NOT NULL,
+
     data_nascimento DATE NOT NULL,
+
     tipo_usuario VARCHAR(20) NOT NULL
         CHECK (tipo_usuario IN ('CLIENTE', 'EMPREENDEDOR')),
 
     latitude DECIMAL(10,8) NULL,
+
     longitude DECIMAL(11,8) NULL,
 
     criado_em DATETIME2 NOT NULL
@@ -319,7 +327,7 @@ cidade varchar(80) not null,
 estado char(2) not null,
 latitude decimal(10,8) null,
 longitude decimal(11,8) null,
-principal bit not null default 0,
+principaç bit not null default 0,
 criado_em datetime2 not null default sysdatetime(),
 constraint FK_Endereco_Usuario
   foreign key (usuario_id) references Usuario(id) on delete cascade,
@@ -427,6 +435,42 @@ constraint FK_BloqueioHorarios_Usuario foreign key (empreendedor_id) references 
 constraint CK_Bloqueio_Valido check(data_fim > data_inicio)
 );
 
+create table Termos(
+id bigint identity(1,1) primary key,
+tipo varchar (50) not null
+check(tipo in ('TERMOS_DE_USO', 'POLITICA_PRIVACIDADE', 'TERMO_SEM_PAGAMENTO')),
+versao varchar(20) not null,
+conteudo varchar(max) not null,
+ativo bit not null
+constraint DF_Termos_Ativo default 1,
+publicado_em datetime2 not null
+constraint DF_Termos_PublicadoEm default sysdatetime(),
+constraint UQ_Termos_TipoVersao unique (tipo,versao)
+
+);
+
+create table Usuario_Termos_Aceite(
+id bigint identity(1,1) primary key,
+usuario_id bigint not null,
+termo_id bigint not null,
+aceito_em datetime2 not null
+constraint DF_UsuarioTermosAceite_AceitoEm default sysdatetime(),
+ip_aceite varchar(45) null,
+user_agent varchar(255) null,
+
+constraint FK_TermosAceite_Usuario
+foreign key (usuario_id) references Usuario(id),
+
+constraint FK_TermosAceite_Termo
+foreign key (termo_id) references Termos(id)
+
+);
+
+
+
+
+
+
 
 
 create index IX_Usuario_Email on Usuario(email);
@@ -435,4 +479,5 @@ create index IX_Agendamentos_Data on Agendamentos(data_hora_inicio);
 create index IX_Agendamento_Status on Agendamentos(status);
 create index IX_Servicos_Empreendedor on Servicos(empreendedor_id);
 create index IX_Portifolio_Empreendedor on Portfolio_Fotos(empreendedor_id);
+
 
